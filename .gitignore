@@ -1,0 +1,27 @@
+# Entorno y caché de Python
+.venv/
+__pycache__/
+*.pyc
+
+# Datos crudos (~2,8 GB): se descargan con descargar_datos.py
+datos/
+
+# Características por ventana (~340 MB): se regeneran con paso2_features.py
+resultados/paso2/features/
+
+# Auxiliares de LaTeX
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.nav
+*.snm
+*.vrb
+
+# Editor
+.vscode/

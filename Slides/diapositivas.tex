@@ -1,0 +1,389 @@
+% Diapositivas de avance (datos y procesamiento). Compilar desde esta carpeta:  latexmk -pdf diapositivas.tex
+% Las figuras se leen de ../resultados/paso2/ (generadas por paso2_features.py y material_reporte.py).
+\documentclass[aspectratio=169,11pt]{beamer}
+\usetheme[progressbar=frametitle, numbering=fraction, sectionpage=none, block=fill]{metropolis}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands,es-tabla]{babel}
+\usepackage{booktabs}
+\usepackage{array}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}   % columna de texto alineada a la izquierda
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\usepackage{siunitx}
+\sisetup{output-decimal-marker={,}}
+\graphicspath{{../resultados/paso2/}}
+
+\definecolor{azul}{HTML}{2A78D6}
+\definecolor{gris}{HTML}{52514E}
+\setbeamercolor{progress bar}{fg=azul, bg=azul!15}
+\setbeamercolor{alerted text}{fg=azul}
+\setbeamercolor{block title}{bg=azul!18, fg=black}
+\setbeamercolor{block body}{bg=azul!6, fg=black}
+\setbeamercolor{block title alerted}{bg=azul, fg=white}
+\setbeamercolor{block body alerted}{bg=azul!6, fg=black}
+\newcommand{\uV}{\si{\micro\volt}}
+\makeatletter  % \input primitivo: filas de tablas generadas por material_reporte.py desde los CSV
+\newcommand{\tabla}[1]{\@@input ../resultados/paso2/tablas/#1 }
+\makeatother
+
+\title{Características EEG: ventana y solapamiento}
+\subtitle{TEPT, Alzheimer y depresión mayor. Avance: datos y procesamiento}
+\author{Aldrin Chavez, Jhony Peñaherrera, Marck Chiza y Fernando Chantera}
+\date{24 de noviembre de 2026}
+
+\begin{document}
+
+\maketitle
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Punto de partida: OnTEPT}
+  \begin{itemize}
+    \item OnTEPT (Salazar-Castro et al., 2026) es una ontología de TEPT que integra \alert{36 características EEG} de 41 participantes.
+    \item No documenta \alert{con qué parámetros} se calcularon (ventana, solapamiento) ni \alert{qué tan fiables} son.
+  \end{itemize}
+  \vspace{4mm}
+  \begin{block}{Pregunta}
+    ¿Cómo cambian la \textbf{estabilidad}, el \textbf{costo} y la \textbf{relevancia} (SHAP) de las características EEG según la longitud de ventana (1, 2 y 4 s) y el solapamiento (0, 50 y 75 \%)?
+  \end{block}
+  \vspace{3mm}
+  {\small Análisis exploratorio de investigación, no clínico: TEPT y otras dos enfermedades.}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Plan en tres pasos}
+  \begin{enumerate}
+    \item \textbf{Datos}: tres conjuntos públicos, uno de TEPT y dos de otras enfermedades. (\alert{hecho})
+    \item \textbf{Nueve configuraciones}: ventanas de 1, 2 y 4 s por solapamientos de 0, 50 y 75 \%; se miden la estabilidad y el tiempo. (\alert{hecho})
+    \item \textbf{Clasificador y SHAP} en cada conjunto: qué características, bandas y canales pesan más. (pendiente)
+  \end{enumerate}
+  \vspace{5mm}
+  \begin{alertblock}{Regla}
+    Nunca mezclar conjuntos en un mismo modelo: cada uno usa un equipo distinto, y el modelo aprendería a reconocer el equipo y no la enfermedad.
+  \end{alertblock}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Búsqueda de datos}
+  \begin{columns}[T]
+    \begin{column}{0.36\textwidth}
+      \textbf{Criterios}
+      \begin{itemize}\small
+        \item Acceso abierto
+        \item Diagnóstico etiquetado
+        \item Controles sanos
+        \item Registro en reposo
+        \item Canales y frecuencia documentados
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.6\textwidth}
+      \textbf{Fuentes de EEG citadas por OnTEPT}
+      \begin{itemize}\small
+        \item du Bois 2022: 29 pacientes con TEPT, \alert{sin controles sanos}; EEG solo en 20.
+        \item Rahmani 2018: 6 con TEPT y 6 controles. \alert{El DOI de datos que da OnTEPT es erróneo.}
+        \item DAIC-WOZ: solo cuestionarios, sin EEG.
+      \end{itemize}
+      \textbf{Otras fuentes}
+      \begin{itemize}\small
+        \item OpenNeuro y TDBRAIN: ningún EEG de TEPT.
+        \item Park 2021: solo características ya calculadas, sin señal.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Los tres conjuntos de datos}
+  \footnotesize
+  \centering
+  \begin{tabular}{@{}P{2.6cm} P{3.3cm} P{3.3cm} P{3.3cm}@{}}
+    \toprule
+     & \textbf{TEPT} & \textbf{Alzheimer} & \textbf{Depresión mayor} \\
+    \midrule
+    Fuente & Rahmani 2018 (figshare) & ds004504 (OpenNeuro) & Mumtaz 2017 (figshare) \\
+    Pacientes / controles & 6 / 6 & 36 / 29 & 28 / 27 \\
+    Registro & Dentro de un resonador (EEG con fMRI) & Clínico, reposo, ojos cerrados & Reposo, ojos cerrados \\
+    Canales & 31 + ECG & 19 & 19 + auxiliares \\
+    Muestreo & 250 Hz & 500 Hz & 256 Hz \\
+    Referencia & FCz & Cz & Orejas unidas \\
+    Duración & 520 s & 5--21 min & $\approx$ 5 min \\
+    Procesado previo & Sí (ICA, filtro a 40 Hz) & No & No \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{3mm}
+  {\small Todo difiere entre conjuntos: hay que \alert{armonizar} la señal y entrenar \alert{un modelo por conjunto}.}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Control de calidad}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+      \small
+      \begin{tabular}{@{}P{4.1cm} P{3.7cm}@{}}
+        \toprule
+        Problema en depresión & Qué se hizo \\
+        \midrule
+        6 archivos rotos en figshare & No se pueden descargar \\
+        2 pares de archivos idénticos & Se elimina la copia \\
+        1 registro de 180 s & Se excluye ($<$ 240 s) \\
+        Canales extra casi solo en controles & Se usan los 19 comunes \\
+        \bottomrule
+      \end{tabular}
+
+      \vspace{3mm}
+      {\footnotesize Con un duplicado en entrenamiento y otro en prueba, el modelo reconocería la señal y no la enfermedad: la exactitud saldría inflada.}
+    \end{column}
+    \begin{column}{0.36\textwidth}
+      \begin{block}{Muestra final: 132 sujetos}
+        TEPT: 6 + 6\\
+        Alzheimer: 36 + 29\\
+        Depresión: 28 + 27\\[2pt]
+        {\footnotesize (pacientes + controles)}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{El mismo procesamiento para los tres conjuntos}
+  \centering
+  \begin{tikzpicture}[
+      caja/.style={draw=azul, fill=azul!8, rounded corners=2pt, align=center, font=\scriptsize,
+                   minimum height=12mm, text width=19mm, inner sep=2pt},
+      analisis/.style={caja, draw=gris, fill=gris!8},
+      flecha/.style={-{Stealth[length=2mm]}, semithick, draw=gris},
+      node distance=10mm and 3mm]
+    \node[caja] (a) {Lectura:\\19 canales en \uV};
+    \node[caja, right=of a] (b) {Remuestreo\\a 256 Hz};
+    \node[caja, right=of b] (c) {Filtro\\1--40 Hz};
+    \node[caja, right=of c] (d) {Referencia\\promedio};
+    \node[caja, right=of d] (e) {Recorte\\a 240 s};
+    \node[caja, right=of e] (f) {Segundos con\\artefactos};
+    \node[analisis, below=of f] (g) {Ventanas:\\9 configuraciones};
+    \node[analisis, left=of g] (h) {228 caracte-\\rísticas};
+    \node[analisis, left=of h] (i) {Estabilidad\\y tiempo};
+    \node[analisis, left=of i, dashed] (j) {Clasificador\\y SHAP\\(pendiente)};
+    \foreach \x/\y in {a/b, b/c, c/d, d/e, e/f, f/g, g/h, h/i, i/j}
+      \draw[flecha] (\x) -- (\y);
+  \end{tikzpicture}
+
+  \vspace{5mm}
+  {\small \textcolor{azul}{Arriba}: armonizar la señal. \textcolor{gris}{Abajo}: cortar en ventanas, calcular características y evaluar.}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Armonización: qué se hace y por qué}
+  \footnotesize
+  \centering
+  \begin{tabular}{@{}l P{4.2cm} P{7.4cm}@{}}
+    \toprule
+    Paso & Qué & Por qué \\
+    \midrule
+    Canales & 19 del sistema 10-20 & Son los únicos comunes a los tres conjuntos \\
+    Muestreo & 256 Hz & La entropía depende de la frecuencia; con 256 Hz los pasos de ventana son enteros \\
+    Filtro & 1--40 Hz, fase cero & Quita derivas lentas; 40 Hz es el techo de Rahmani; elimina la red eléctrica \\
+    Referencia & Promedio de los 19 canales & Cada conjunto usaba otra; la original se cancela \\
+    Duración & 240 s por sujeto & Misma cantidad de datos y mismo peso por sujeto \\
+    Artefactos & Segundo malo si supera \SI{150}{\micro\volt} pico a pico & Quita parpadeos y movimientos sin perder el ritmo alfa amplio \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{2mm}
+  {\small La \alert{estandarización de las características} (z-score) irá en el paso 3, dentro de la validación cruzada.}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Qué hace el procesamiento: un ejemplo real}
+  \centering
+  \includegraphics[width=0.96\textwidth]{fig_ejemplo_senal.png}
+
+  {\footnotesize Control sub-050 (ds004504), canal O1. A: se van la deriva y el ruido. B: una ventana sola es ruidosa; el promedio, estable.}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Ventanas y solapamiento}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[x=6mm, y=1mm]
+        \foreach \base/\paso/\etq in {0/4/{0 \%}, -12/2/{50 \%}, -28/1/{75 \%}} {
+          \node[anchor=east, font=\footnotesize] at (-0.2, \base-1) {\etq};
+          \pgfmathtruncatemacro{\n}{4/\paso}
+          \foreach \k in {0,...,\n} {
+            \pgfmathsetmacro{\dy}{(\paso<4)*\k*2.6}
+            \fill[azul!20, draw=azul] (\k*\paso, \base-\dy) rectangle ++(4, -2);
+          }
+        }
+        \draw[-{Stealth}, gris] (0, -44) -- (8.6, -44) node[right, font=\scriptsize] {s};
+        \foreach \t in {0, 2, 4, 6, 8}
+          \draw[gris] (\t, -43.3) -- (\t, -44.7) node[below, font=\scriptsize] {\t};
+      \end{tikzpicture}
+
+      {\scriptsize Ventanas de 4 s durante los primeros 8 s}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \footnotesize
+      \centering
+      \begin{tabular}{@{}lrrr@{}}
+        \toprule
+         & \multicolumn{3}{c}{Ventanas en 240 s} \\
+        \cmidrule(l){2-4}
+        Ventana & 0 \% & 50 \% & 75 \% \\
+        \midrule
+        1 s & 240 & 479 & 957 \\
+        2 s & 120 & 239 & 477 \\
+        4 s & 60 & 119 & 237 \\
+        \bottomrule
+      \end{tabular}
+
+      \vspace{3mm}
+      \begin{itemize}
+        \item Más solapamiento: más ventanas, pero \alert{no más información}.
+        \item Ventana más larga: mejor resolución en frecuencia (de 1 a 0,25 Hz), pero más pérdida por artefactos.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{228 características por ventana}
+  \footnotesize
+  \centering
+  \begin{tabular}{@{}P{3.9cm} c P{5.4cm} >{\centering\arraybackslash}p{2.3cm}@{}}
+    \toprule
+    Familia & Tipos & Qué mide & ¿Depende de la amplitud? \\
+    \midrule
+    Potencia absoluta ($\log_{10}$) & 5 & Cuánta actividad hay en la banda & Sí \\
+    Potencia relativa & 5 & Proporción del total de 1--40 Hz & No \\
+    Entropía espectral & 1 & Qué tan repartido está el espectro (0 a 1) & No \\
+    Entropía de permutación & 1 & Qué tan impredecible es la forma de onda (0 a 1) & No \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{4mm}
+  \raggedright
+  \begin{itemize}\small
+    \item Bandas: $\delta$ 1--4, $\theta$ 4--8, $\alpha$ 8--13, $\beta$ 13--30 y $\gamma$ 30--40 Hz.
+    \item 12 tipos × 19 canales = \alert{228 características}; por ejemplo, \texttt{rel\_alpha\_O1}.
+    \item Espectro: periodograma con ventana de Hann; su resolución es 1 / longitud de la ventana.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{¿Cómo se mide la estabilidad?}
+  \centering
+  \begin{tikzpicture}[font=\footnotesize]
+    \draw[fill=azul!15, draw=azul] (0, 0) rectangle (5, 0.7) node[midway] {1.ª mitad: 0--120 s};
+    \draw[fill=azul!35, draw=azul] (5, 0) rectangle (10, 0.7) node[midway] {2.ª mitad: 120--240 s};
+    \node[anchor=east] at (-0.1, 0.35) {Registro};
+    \draw[-{Stealth}, gris] (2.5, -0.1) -- (2.5, -0.7) node[below] {promedio A};
+    \draw[-{Stealth}, gris] (7.5, -0.1) -- (7.5, -0.7) node[below] {promedio B};
+    \node[draw=gris, rounded corners=2pt, fill=gris!8, align=center, inner sep=4pt] at (5, -2.3)
+      {ICC(A,1) entre sujetos: ¿cada sujeto conserva su valor de A a B?};
+  \end{tikzpicture}
+
+  \vspace{5mm}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \footnotesize
+      \begin{itemize}
+        \item ICC $\approx$ 1: la característica «reconoce» al sujeto.
+        \item ICC $\approx$ 0: cambia entre mitades tanto como entre personas.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \footnotesize
+      Escala de Koo y Li (2016): menos de 0,5, pobre; 0,5--0,75, moderada; 0,75--0,9, buena; más de 0,9, excelente.
+
+      \vspace{2mm}
+      Mismos sujetos en las 9 configuraciones.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Resultado 1: la estabilidad es alta en todas las configuraciones}
+  \centering\small
+  ICC mediano entre mitades: mínimo y máximo en las 9 configuraciones\\[2mm]
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Familia & TEPT ($n = 12$) & Alzheimer ($n = 65$) & Depresión ($n = 55$) \\
+    \midrule
+    \tabla{estabilidad_familias.tex}
+    \bottomrule
+  \end{tabular}
+
+  \vspace{4mm}
+  \raggedright
+  \begin{itemize}\small
+    \item El solapamiento no cambia la estabilidad y la longitud de ventana, casi tampoco.
+    \item Menos estables: $\delta$ y $\alpha$ relativas en TEPT (ICC de 0,6 a 0,8) y $\gamma$ relativa en Alzheimer y depresión.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Resultado 2: el solapamiento solo añade costo}
+  \centering\small
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+     & \multicolumn{3}{c}{Tiempo por sujeto (ms)} & Ventanas descartadas \\
+    \cmidrule(lr){2-4}
+    Ventana & 0 \% & 50 \% & 75 \% & por artefactos (\%) \\
+    \midrule
+    \tabla{costo_diapositivas.tex}
+    \bottomrule
+  \end{tabular}
+
+  {\footnotesize Medianas de los 132 sujetos (240 s y 19 canales cada uno). Descartadas: rango entre los tres conjuntos, sin solapamiento.}
+
+  \vspace{1mm}
+  \raggedright
+  \begin{itemize}\small
+    \item Con 50 \% el tiempo se duplica y con 75 \% se multiplica por unas 7, con la misma estabilidad.
+    \item Las ventanas largas pierden más datos: basta un segundo malo para descartar la ventana entera.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Para tener en cuenta}
+  \begin{itemize}
+    \item \textbf{Amplitud}: en TEPT y depresión los pacientes tienen cerca de la mitad de amplitud que los controles (RMS de 4,0 frente a 7,8 \uV\ y de 5,3 frente a 8,0 \uV). La potencia absoluta podría separar los grupos por el registro y no por la enfermedad.
+    \item \textbf{TEPT}: solo 12 sujetos, registrados dentro de un resonador y ya preprocesados.
+    \item \textbf{Techo del ICC}: con 2 minutos por mitad, los promedios son muy estables; las diferencias entre configuraciones deberían verse ventana a ventana.
+    \item \textbf{Calidad de datos}: el conjunto de depresión perdió 9 de sus 64 registros.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Próximo paso: clasificador y SHAP}
+  \begin{itemize}
+    \item Un clasificador simple por conjunto (pacientes frente a controles) para cada una de las 9 configuraciones.
+    \item Validación cruzada \alert{por sujeto}: dejando uno fuera en TEPT y con 5 particiones en Alzheimer y depresión.
+    \item Estandarización dentro de cada partición de entrenamiento.
+    \item SHAP: qué características, bandas y canales pesan más, y si cambian con la configuración.
+  \end{itemize}
+  \vspace{2mm}
+  \begin{block}{Por decidir}
+    El tipo de clasificador (propuesta: regresión logística con L2) y si se compara un modelo con todas las características frente a otro sin potencia absoluta.
+  \end{block}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------------
+\begin{frame}{Referencias principales}
+  \scriptsize
+  \begin{itemize}
+    \item Salazar-Castro, J. A. et al. (2026). OnTEPT: a multimodal OWL ontology for post-traumatic stress disorder. \emph{Journal of Biomedical Semantics}, 17:21.
+    \item Rahmani, B. et al. (2018). Dynamical Hurst analysis identifies EEG channel differences between PTSD and healthy controls. \emph{PLOS ONE}, 13(7):e0199144. Datos: doi 10.6084/m9.figshare.5393338.
+    \item Miltiadous, A. et al. (2023). A dataset of scalp EEG recordings of Alzheimer's disease, frontotemporal dementia and healthy subjects from routine EEG. \emph{Data}, 8(6):95. Datos: OpenNeuro ds004504.
+    \item Mumtaz, W. et al. (2017). A wavelet-based technique to predict treatment outcome for major depressive disorder. \emph{PLOS ONE}, 12(2):e0171409. Datos: doi 10.6084/m9.figshare.4244171.
+    \item du Bois, N. et al. (2022). \emph{Data in Brief}, 42:108066.
+    \item McGraw, K. O. y Wong, S. P. (1996). \emph{Psychological Methods}, 1(1):30--46.
+    \item Koo, T. K. y Li, M. Y. (2016). \emph{Journal of Chiropractic Medicine}, 15(2):155--163.
+    \item Bandt, C. y Pompe, B. (2002). \emph{Physical Review Letters}, 88:174102.
+    \item Inouye, T. et al. (1991). \emph{Electroencephalography and Clinical Neurophysiology}, 79(3):204--210.
+  \end{itemize}
+  \vspace{1mm}
+  {\footnotesize Lista completa con DOI en el informe (carpeta \texttt{Report}).}
+\end{frame}
+
+\end{document}

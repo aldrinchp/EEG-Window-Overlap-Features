@@ -1,8 +1,8 @@
-"""Paso 2: el mismo preprocesamiento para los 3 datasets, 9 configuraciones de ventana
-(1/2/4 s × 0/50/75 % de solapamiento), potencia por bandas + entropía, estabilidad
+"""Paso 2: el mismo preprocesamiento para los 3 datasets, 16 configuraciones de ventana
+(1/2/4/8 s × 0/25/50/75 % de solapamiento), potencia por bandas + entropía, estabilidad
 entre la 1.ª y la 2.ª mitad de cada registro (ICC) y tiempo de cómputo.
 
-Uso:    .venv/bin/python -I paso2_features.py
+Uso:    .venv/bin/python -I paso2_features.py   (Windows: .venv\Scripts\python -I paso2_features.py)
 Salida: resultados/paso2/  (features por ventana en .npz para el paso 3, CSV y figuras)
 """
 import hashlib
@@ -31,7 +31,8 @@ CANALES = ['Fp1', 'Fp2', 'F7', 'F3', 'Fz', 'F4', 'F8', 'T3', 'C3', 'Cz', 'C4',
 BANDAS = {'delta': (1, 4), 'theta': (4, 8), 'alpha': (8, 13), 'beta': (13, 30), 'gamma': (30, 40)}
 TIPOS = [f'abs_{b}' for b in BANDAS] + [f'rel_{b}' for b in BANDAS] + ['ent_espectral', 'ent_permutacion']
 NOMBRES = [f'{t}_{c}' for t in TIPOS for c in CANALES]          # 12 tipos × 19 canales = 228
-CONFIGS = [(v, s) for v in (1, 2, 4) for s in (0, 50, 75)]      # (ventana en s, solapamiento en %)
+VENTANAS, SOLAPES = (1, 2, 4, 8), (0, 25, 50, 75)
+CONFIGS = [(v, s) for v in VENTANAS for s in SOLAPES]           # (ventana en s, solapamiento en %): 16
 SOS = butter(4, [1, 40], btype='bandpass', fs=FS, output='sos')
 
 
@@ -133,12 +134,19 @@ def autotest():
     malo[10] = True                                              # artefacto en el segundo 10
     ini, _, total = ventanear(np.zeros((1, DURACION * FS)), malo, 4, 75)
     assert total == 237 and not ((ini < 11 * FS) & (ini + 4 * FS > 10 * FS)).any()
+    # Avances enteros a 256 Hz y, para cada ventana, las ventanas de cada solapamiento son un
+    # subconjunto de las de 75 % (todos los avances son múltiplos de n/4)
+    for v, s in CONFIGS:
+        assert (v * FS * (100 - s)) % 100 == 0
+        a, _, _ = ventanear(np.zeros((1, DURACION * FS)), malo, v, s)
+        b, _, _ = ventanear(np.zeros((1, DURACION * FS)), malo, v, 75)
+        assert np.isin(a, b).all()
 
 
 # ---------- figuras (paleta de referencia: rampa azul secuencial y 3 primeros colores categóricos) ----------
 AZUL = ['#cde2fb', '#b7d3f6', '#9ec5f4', '#86b6ef', '#6da7ec', '#5598e7', '#3987e5',
         '#2a78d6', '#256abf', '#1c5cab', '#184f95', '#104281', '#0d366b']
-SERIES = ['#2a78d6', '#eb6834', '#1baf7a']
+SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#f2a600']
 TINTA, TINTA2, TENUE, REJILLA, EJE, FONDO = '#0b0b0b', '#52514e', '#898781', '#e1e0d9', '#c3c2b7', '#fcfcfb'
 ETIQUETAS = ['Pot. absoluta δ', 'Pot. absoluta θ', 'Pot. absoluta α', 'Pot. absoluta β', 'Pot. absoluta γ',
              'Pot. relativa δ', 'Pot. relativa θ', 'Pot. relativa α', 'Pot. relativa β', 'Pot. relativa γ',
@@ -149,20 +157,21 @@ plt.rcParams.update({'font.family': 'sans-serif', 'text.color': TINTA, 'axes.lab
 
 
 def figura_icc(icc, n_icc):
-    fig, axes = plt.subplots(1, 3, figsize=(14, 5.6), sharey=True, constrained_layout=True)
+    nv, ns = len(VENTANAS), len(SOLAPES)
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5.8), sharey=True, constrained_layout=True)
     for ax, ds in zip(axes, DATASETS):
         m = icc[icc.dataset == ds].groupby(['tipo', 'ventana_s', 'solape_pct']).icc.median().unstack(['ventana_s', 'solape_pct'])
         im = ax.imshow(m.loc[TIPOS, CONFIGS].to_numpy(), cmap=LinearSegmentedColormap.from_list('azul', AZUL),
                        vmin=0, vmax=1, aspect='auto')
-        for borde in (2.5, 5.5):
-            ax.axvline(borde, color=FONDO, lw=4)
+        for i in range(1, nv):
+            ax.axvline(ns * i - 0.5, color=FONDO, lw=4)
         for borde in (4.5, 9.5):
             ax.axhline(borde, color=FONDO, lw=4)
-        ax.set_xticks(range(9), [f'{s} %' for _, s in CONFIGS], fontsize=8)
-        for i, v in enumerate((1, 2, 4)):
-            ax.text(3 * i + 1, -0.85, f'Ventana {v} s', ha='center', va='bottom', fontsize=9, color=TINTA2)
+        ax.set_xticks(range(len(CONFIGS)), [f'{s}' for _, s in CONFIGS], fontsize=7)
+        for i, v in enumerate(VENTANAS):
+            ax.text(ns * i + (ns - 1) / 2, -0.85, f'Ventana {v} s', ha='center', va='bottom', fontsize=9, color=TINTA2)
         ax.set_title(f'{ds}  (n = {n_icc[ds]})', fontsize=11, pad=22, loc='left')
-        ax.set_xlabel('Solapamiento')
+        ax.set_xlabel('Solapamiento (%)')
         ax.tick_params(length=0)
         for lado in ax.spines.values():
             lado.set_visible(False)
@@ -174,14 +183,16 @@ def figura_icc(icc, n_icc):
 def figura_costo(tiempos):
     med = tiempos.groupby(['ventana_s', 'solape_pct'])[['n_ventanas', 't_extraccion_s']].median()
     med['t_ms'] = med.t_extraccion_s * 1000
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.2), constrained_layout=True)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 4.6), constrained_layout=True)
+    ancho = 0.8 / len(SOLAPES)
     for ax, col, titulo, fmt in [(axes[0], 'n_ventanas', 'Ventanas limpias por sujeto (mediana)', '{:.0f}'),
                                  (axes[1], 't_ms', 'Tiempo de extracción por sujeto en ms (mediana)', '{:.0f}')]:
-        for j, s in enumerate((0, 50, 75)):
-            y = [med.loc[(v, s), col] for v in (1, 2, 4)]
-            barras = ax.bar(np.arange(3) + (j - 1) * 0.25, y, width=0.22, color=SERIES[j], label=f'{s} %')
-            ax.bar_label(barras, [fmt.format(val) for val in y], padding=2, fontsize=8, color=TINTA2)
-        ax.set_xticks(range(3), ['1 s', '2 s', '4 s'])
+        for j, s in enumerate(SOLAPES):
+            y = [med.loc[(v, s), col] for v in VENTANAS]
+            barras = ax.bar(np.arange(len(VENTANAS)) + (j - (len(SOLAPES) - 1) / 2) * ancho, y, width=ancho - 0.02,
+                            color=SERIES[j], label=f'{s} %')
+            ax.bar_label(barras, [fmt.format(val) for val in y], padding=2, fontsize=7, color=TINTA2)
+        ax.set_xticks(range(len(VENTANAS)), [f'{v} s' for v in VENTANAS])
         ax.set_xlabel('Longitud de ventana')
         ax.set_title(titulo, fontsize=11, loc='left')
         ax.grid(axis='y', color=REJILLA, lw=0.8)
@@ -230,7 +241,7 @@ def main():
             np.savez(SALIDA / 'features' / f'{CLAVE[ds]}_v{v}s_s{s}.npz', X=X, sujeto=suj, grupo=grp,
                      inicio_s=ini, mitad=mit, nombres=np.array(NOMBRES))
             datos[(v, s)] = (X, suj, mit)
-        # Mismo conjunto de sujetos en las 9 configuraciones: así el ICC solo cambia por la configuración
+        # Mismo conjunto de sujetos en las 16 configuraciones: así el ICC solo cambia por la configuración
         incluidos = [f['sujeto'] for f in sujetos if f['dataset'] == ds and f['incluido']]
         ok = [u for u in incluidos if all(((suj == u) & (mit == h)).sum() >= MIN_VENTANAS_MITAD
                                           for _, suj, mit in datos.values() for h in (0, 1))]

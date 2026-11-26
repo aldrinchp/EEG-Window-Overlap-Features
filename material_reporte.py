@@ -86,7 +86,7 @@ def tablas():
     tiempos = pd.read_csv(p2.SALIDA / 'tiempos.csv')
 
     m = icc[icc.solape_pct == 0].groupby(['tipo', 'dataset', 'ventana_s']).icc.median()
-    filas = [ETIQ[t] + ' & ' + ' & '.join(coma(m[(t, ds, v)]) for ds in p2.DATASETS for v in (1, 2, 4)) + r' \\'
+    filas = [ETIQ[t] + ' & ' + ' & '.join(coma(m[(t, ds, v)]) for ds in p2.DATASETS for v in p2.VENTANAS) + r' \\'
              for t in p2.TIPOS]
     filas.insert(5, r'\midrule')
     filas.insert(11, r'\midrule')
@@ -108,7 +108,7 @@ def tablas():
              for v, s in p2.CONFIGS]
     (TABLAS / 'costo.tex').write_text('\n'.join(filas) + '\n')
 
-    # Diapositivas: ICC mediano por familia, mínimo-máximo en las 9 configuraciones
+    # Diapositivas: ICC mediano por familia, mínimo-máximo en las 16 configuraciones
     def rango(c, d=2):
         lo, hi = coma(c.min(), d), coma(c.max(), d)
         return lo if lo == hi else f'{lo}--{hi}'
@@ -120,9 +120,9 @@ def tablas():
     (TABLAS / 'estabilidad_familias.tex').write_text('\n'.join(filas) + '\n')
 
     # Diapositivas: tiempo por sujeto según solapamiento y ventanas descartadas (rango entre conjuntos, 0 %)
-    filas = [f'{v} s & ' + ' & '.join(f'{1000 * med.loc[(v, s)].t_extraccion_s:.0f}' for s in (0, 50, 75)) + ' & '
+    filas = [f'{v} s & ' + ' & '.join(f'{1000 * med.loc[(v, s)].t_extraccion_s:.0f}' for s in p2.SOLAPES) + ' & '
              + rango(pd.Series([res.loc[(ds, v, 0)].pct_descartadas for ds in p2.DATASETS]), 1) + r' \\'
-             for v in (1, 2, 4)]
+             for v in p2.VENTANAS]
     (TABLAS / 'costo_diapositivas.tex').write_text('\n'.join(filas) + '\n')
 
     filas = []
